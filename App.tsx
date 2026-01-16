@@ -38,7 +38,17 @@ const SACRED_MOMENTS = [
   "A Visão dos Sete Castiçais", "O Cavaleiro do Cavalo Branco", "A Nova Jerusalém",
   "O Trono de Marfim", "A Queda de Babilônia", "Gideão e os Trezentos", "A Chamada de Samuel",
   "Rute nos Campos de Boaz", "Salomão e a Sabedoria", "A Cura do Paralítico",
-  "A Mulher do Fluxo de Sangue", "Zaqueu na Árvore", "O Retorno do Filho Pródigo"
+  "A Mulher do Fluxo de Sangue", "Zaqueu na Árvore", "O Retorno do Filho Pródigo",
+  "O Sonho de Faraó", "O Nascimento de Moisés", "A Praga das Gafanhotos", "A Morte dos Primogênitos",
+  "O Cântico de Maria", "As Fontes de Elim", "O Combate contra Amaleque", "O Rosto Resplandecente de Moisés",
+  "O Tabernáculo no Deserto", "A Rebelião de Corá", "A Vara de Arão que Floresceu", "A Serpente de Bronze",
+  "A Jumenta de Balaão", "O Chamado de Josué", "A Queda de Jericó", "O Sol que Parou em Gibeão",
+  "O Voto de Jefté", "O Casamento de Rute e Boaz", "Ana Orando no Templo", "O Chamado de Samuel no Templo",
+  "A Arca na Casa de Obede-Edom", "A Bondade de Davi com Mefibosete", "O Pecado de Davi e Bate-Seba", "A Sabedoria de Salomão",
+  "A Rainha de Sabá visita Salomão", "Elias e a Viúva de Serepta", "Elias no Monte Carmelo", "Nabote e a Vinha",
+  "Eliseu e a Sunamita", "A Cura de Naamã", "O Machado que Flutuou no Rio", "O Cerco de Jerusalém por Senaqueribe",
+  "A Oração de Ezequias", "O Livro da Lei Encontrado por Josias", "A Reconstrução dos Muros por Neemias", "O Banquete de Ester",
+  "Os Amigos de Jó", "A Glória da Segunda Casa", "A Visão de Ezequiel dos Ossos Secos", "O Nascimento de João Batista"
 ];
 
 // --- Sub-componentes de UI ---
@@ -84,9 +94,9 @@ const BatchGenerator = ({ type, onFinished }: { type: 'images' | 'crosswords', o
 
   const startBatch = async () => {
     setStatus("running");
-    setLog([`Iniciando Revelação dos 60 ${type === 'images' ? 'Visões' : 'Enigmas'}...`]);
+    setLog([`Iniciando Revelação dos 100 ${type === 'images' ? 'Visões' : 'Enigmas'}...`]);
     
-    for (let i = 1; i <= 60; i++) {
+    for (let i = 1; i <= 100; i++) {
       setCurrentLevel(i);
       
       if (type === 'images') {
@@ -102,9 +112,10 @@ const BatchGenerator = ({ type, onFinished }: { type: 'images' | 'crosswords', o
       } else {
         const exists = await getStoredCrossword(i);
         if (!exists) {
-          setLog(prev => [`Tecendo Enigma Nível ${i}...`, ...prev.slice(0, 5)]);
+          const theme = SACRED_MOMENTS[(i - 1) % SACRED_MOMENTS.length];
+          setLog(prev => [`Tecendo Enigma Nível ${i}: ${theme}`, ...prev.slice(0, 5)]);
           const puzzle = await generateCrossword(i);
-          if (puzzle) await saveCrossword(i, puzzle.theme, puzzle);
+          if (puzzle) await saveCrossword(i, puzzle.theme || theme, puzzle);
         } else {
           setLog(prev => [`Enigma ${i} já registrado.`, ...prev.slice(0, 5)]);
         }
@@ -125,7 +136,7 @@ const BatchGenerator = ({ type, onFinished }: { type: 'images' | 'crosswords', o
           <h4 className="text-2xl font-black bible-text italic text-white uppercase tracking-tighter">
             {type === 'images' ? 'Pintor de Visões' : 'Escriba de Enigmas'}
           </h4>
-          <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.3em]">Processamento Sagrado em Lote (1-60)</p>
+          <p className="text-[9px] text-gray-500 font-black uppercase tracking-[0.3em]">Processamento Sagrado em Lote (1-100)</p>
         </div>
       </div>
 
@@ -138,7 +149,7 @@ const BatchGenerator = ({ type, onFinished }: { type: 'images' | 'crosswords', o
       {status === 'running' && (
         <div className="space-y-6">
           <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-            <div className="h-full bg-amber-500 transition-all duration-700" style={{ width: `${(currentLevel / 60) * 100}%` }} />
+            <div className="h-full bg-amber-500 transition-all duration-700" style={{ width: `${(currentLevel / 100) * 100}%` }} />
           </div>
           <div className="space-y-2">
             {log.map((line, idx) => (
@@ -250,7 +261,7 @@ const MosaicPuzzle = ({ level, onComplete, onExit }: { level: number, onComplete
             </button>
           </div>
 
-          <div className="w-full max-w-[340px] lg:max-w-sm bg-white/[0.02] backdrop-blur-3xl p-6 rounded-[2rem] border border-white/5 space-y-4">
+          <div className="w-full max-w-[340px] lg:max-sm bg-white/[0.02] backdrop-blur-3xl p-6 rounded-[2rem] border border-white/5 space-y-4">
              <div className="flex items-center justify-between text-[8px] font-black text-gray-500 uppercase tracking-widest px-1">
                 <span>Peças Disponíveis</span>
                 <span className="text-amber-500">{availablePieces.length} Restantes</span>
@@ -290,7 +301,6 @@ const CrosswordGame = ({ level, onComplete }: { level: number, onComplete: () =>
   useEffect(() => {
     const load = async () => {
       setLoading(true);
-      // Tentar buscar do banco primeiro
       const stored = await getStoredCrossword(level);
       if (stored) {
         setPuzzle(stored.puzzle_data);
@@ -308,7 +318,7 @@ const CrosswordGame = ({ level, onComplete }: { level: number, onComplete: () =>
     load();
   }, [level]);
 
-  if (loading) return <LoadingOverlay message="Tecendo o Pergaminho..." />;
+  if (loading) return <LoadingOverlay message="Tecendo o Enigma..." />;
   if (!puzzle) return <div className="text-center p-20 opacity-20">Falha ao carregar desafio.</div>;
 
   return (
@@ -477,8 +487,8 @@ const App: React.FC = () => {
                       </div>
 
                       {gamesSubTab !== 'generator' && (
-                        <div className="grid grid-cols-4 gap-2">
-                          {Array.from({ length: 60 }, (_, i) => i + 1).map(lv => {
+                        <div className="grid grid-cols-4 gap-2 pb-20">
+                          {Array.from({ length: 100 }, (_, i) => i + 1).map(lv => {
                             const vision = galleryImages.find(img => img.level === lv);
                             const puzzle = galleryCrosswords.find(c => c.level === lv);
                             const isAct = (gamesSubTab === 'mosaic' ? currentMosaicLevel : currentGameLevel) === lv;
