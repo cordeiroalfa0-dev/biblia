@@ -1,56 +1,302 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
-  BookOpen, Music, Loader2, BookMarked, 
-  Search, X, Settings, ChevronRight, 
-  ClipboardCheck, AlertCircle, Menu, ChevronLeft
+  BookOpen, Music, Loader2, Search, X, Compass, Volume2, 
+  Pause, Sparkles, Menu, ZoomIn, ZoomOut, Type as TypeIcon,
+  Gamepad2, Trophy, CheckCircle2, ImageIcon, Move, LogOut
 } from 'lucide-react';
 import { 
-  fetchVerses, saveVerses,
-  testDatabaseConnection, BIBLE_BOOKS_MASTER,
-  fetchHymns, saveHymnsBulk, supabase
+  fetchVerses, saveVerses, testDatabaseConnection, 
+  BIBLE_BOOKS_MASTER, fetchHymns, supabase,
+  getStoredMosaicImage, saveMosaicImage
 } from './lib/supabase';
 import { fetchChapter } from './services/bibleService';
+import { generateCrossword, generateBiblicalImage } from './services/geminiService';
+import { GoogleGenAI, Modality } from "@google/genai";
+import { decode, decodeAudioData } from './lib/audioUtils';
 
-const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'bible' | 'harpa'>('bible');
-  const [currentBook, setCurrentBook] = useState('Salmos');
-  const [currentChapter, setCurrentChapter] = useState(23);
-  const [verses, setVerses] = useState<any[]>([]);
+// --- Sub-componentes de UI ---
+
+const LoadingOverlay = ({ message = "Carregando..." }) => (
+  <div className="flex-1 flex flex-col items-center justify-center gap-6 animate-pulse p-12 text-center">
+    <div className="relative">
+      <Loader2 className="animate-spin text-amber-500/20 w-16 h-16" />
+      <Sparkles className="absolute inset-0 m-auto text-amber-500 w-6 h-6 animate-pulse" />
+    </div>
+    <span className="text-[10px] font-black uppercase tracking-[0.5em] text-amber-500/30">{message}</span>
+  </div>
+);
+
+const EmptyState = ({ icon: Icon, title }: { icon: any, title: string }) => (
+  <div className="flex-1 flex flex-col items-center justify-center py-20 opacity-20 space-y-4">
+    <Icon size={48} className="text-amber-500" />
+    <span className="text-[10px] font-black uppercase tracking-[0.5em] text-amber-500">{title}</span>
+  </div>
+);
+
+// --- Componente: Mosaico Sagrado (Responsivo 5x5 com Cache em Banco) ---
+
+const MosaicPuzzle = ({ level, onComplete, onExit }: { level: number, onComplete: () => void, onExit: () => void }) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [theme, setTheme] = useState("");
   const [loading, setLoading] = useState(true);
   
+  const gridSize = 5; 
+  const totalPieces = gridSize * gridSize;
+
+  const [availablePieces, setAvailablePieces] = useState<number[]>([]);
+  const [placedPieces, setPlacedPieces] = useState<(number | null)[]>(Array(totalPieces).fill(null));
+
+  useEffect(() => {
+    const initMosaic = async () => {
+      setLoading(true);
+      
+      // 1. Verificar se a imagem já existe no banco de dados
+      const stored = await getStoredMosaicImage(level);
+      
+      if (stored) {
+        setTheme(stored.theme);
+        setImageUrl(stored.image_data);
+      } else {
+        // 2. Se não existir, gerar nova imagem com Gemini
+        const moments = [
+          "A Criação da Luz", "Moisés e a Sarça Ardente", "Travessia do Mar Vermelho", 
+          "Davi e o Gigante Golias", "A Arca de Noé", "A Estrela de Belém", 
+          "Jesus acalmando a tempestade", "A Ressurreição de Cristo", 
+          "Pentecostes", "A Nova Jerusalém", "Daniel na Cova dos Leões", 
+          "A Multiplicação dos Pães", "Batismo de Jesus", "Muros de Jericó",
+          "Elias no Carro de Fogo", "Escada de Jacó", "Cântico de Maria", 
+          "Conversão de Paulo", "Sansão e as Colunas", "O Bom Pastor"
+        ];
+        const selectedMoment = moments[level % moments.length];
+        setTheme(selectedMoment);
+        
+        const img = await generateBiblicalImage(selectedMoment);
+        if (img) {
+          setImageUrl(img);
+          // 3. Salvar no banco para que outros usuários e futuras visitas não precisem gerar de novo
+          await saveMosaicImage(level, selectedMoment, img);
+        }
+      }
+
+      // Preparar peças do jogo
+      const initial = Array.from({ length: totalPieces }, (_, i) => i + 1).sort(() => Math.random() - 0.5);
+      setAvailablePieces(initial);
+      setPlacedPieces(Array(totalPieces).fill(null));
+      setLoading(false);
+    };
+    initMosaic();
+  }, [level]);
+
+  const onDragStart = (e: React.DragEvent, pieceId: number) => {
+    e.dataTransfer.setData("pieceId", pieceId.toString());
+  };
+
+  const onDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const pieceId = parseInt(e.dataTransfer.getData("pieceId"));
+    if (pieceId === targetIndex + 1) {
+      const newPlaced = [...placedPieces];
+      newPlaced[targetIndex] = pieceId;
+      setPlacedPieces(newPlaced);
+      setAvailablePieces(prev => prev.filter(p => p !== pieceId));
+      if (newPlaced.every((p, i) => p === i + 1)) setTimeout(onComplete, 1200);
+    }
+  };
+
+  if (loading) return <LoadingOverlay message="Buscando Visão no Santuário..." />;
+  if (!imageUrl) return <div className="text-center p-20 opacity-20">Erro ao carregar a visão divina.</div>;
+
+  return (
+    <div className="fixed inset-0 bg-[#020202] z-[100] flex flex-col items-center p-4 lg:p-12 animate-in fade-in duration-700 overflow-y-auto">
+      <div className="w-full max-w-6xl flex flex-col items-center gap-8 mt-4 lg:mt-0 mb-32">
+        <div className="text-center space-y-1">
+          <h3 className="text-3xl lg:text-6xl font-black bible-text italic text-white uppercase tracking-tighter">Mosaico Sagrado</h3>
+          <p className="text-[9px] lg:text-[11px] text-amber-500 font-black uppercase tracking-[0.4em]">{theme} • Nível {level}</p>
+        </div>
+
+        <div className="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-8 lg:gap-12 w-full">
+          {/* Grid Principal */}
+          <div className="relative shrink-0 w-full max-w-[320px] lg:max-w-[450px]">
+            <div className="grid grid-cols-5 gap-0.5 bg-white/[0.03] p-1 rounded-2xl border border-white/10 shadow-2xl aspect-square">
+              {placedPieces.map((pieceId, idx) => {
+                const r = Math.floor(idx / gridSize);
+                const c = idx % gridSize;
+                const posX = (c / (gridSize - 1)) * 100;
+                const posY = (r / (gridSize - 1)) * 100;
+                return (
+                  <div key={idx} onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, idx)}
+                    className={`relative rounded-sm border transition-all duration-500 overflow-hidden ${pieceId ? 'border-transparent' : 'border-white/5 bg-black/40 flex items-center justify-center'}`}>
+                    {pieceId ? (
+                      <div className="w-full h-full" style={{ backgroundImage: `url(${imageUrl})`, backgroundSize: '500% 500%', backgroundPosition: `${posX}% ${posY}%` }} />
+                    ) : ( <Sparkles size={8} className="text-white/5" /> )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bandeja de Peças */}
+          <div className="w-full max-w-[320px] lg:max-w-md bg-white/[0.02] backdrop-blur-3xl p-6 rounded-[2rem] border border-white/5 space-y-4">
+             <div className="flex items-center justify-between text-[8px] font-black text-gray-500 uppercase tracking-widest px-1">
+                <span className="flex items-center gap-2"><Move size={10} /> Peças</span>
+                <span className="text-amber-500">{availablePieces.length} Restantes</span>
+             </div>
+             <div className="grid grid-cols-5 gap-1.5 overflow-y-auto max-h-[200px] lg:max-h-none p-1">
+                {availablePieces.map((pieceId) => {
+                  const r = Math.floor((pieceId - 1) / gridSize);
+                  const c = (pieceId - 1) % gridSize;
+                  const posX = (c / (gridSize - 1)) * 100;
+                  const posY = (r / (gridSize - 1)) * 100;
+                  return (
+                    <div key={pieceId} draggable onDragStart={(e) => onDragStart(e, pieceId)}
+                      className="aspect-square rounded-md border border-white/10 cursor-grab active:scale-95 transition-all overflow-hidden"
+                      style={{ backgroundImage: `url(${imageUrl})`, backgroundSize: '500% 500%', backgroundPosition: `${posX}% ${posY}%` }}
+                    />
+                  );
+                })}
+             </div>
+             {availablePieces.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-6 animate-in fade-in duration-1000">
+                   <CheckCircle2 size={32} className="text-green-500 mb-2" />
+                   <span className="text-[10px] font-black uppercase tracking-widest text-white">Completado</span>
+                </div>
+             )}
+          </div>
+        </div>
+      </div>
+
+      <div className="fixed bottom-8 left-0 right-0 flex justify-center z-[110] px-6">
+        <button onClick={onExit}
+          className="group flex items-center gap-4 bg-black/90 hover:bg-black backdrop-blur-2xl px-10 py-5 rounded-full border border-white/10 shadow-2xl transition-all active:scale-95"
+        >
+          <LogOut size={20} className="text-amber-500" />
+          <span className="text-[10px] font-black text-white uppercase tracking-[0.3em]">Sair do Mosaico</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- Componente: Palavras Cruzadas (Sem alterações, mantido para integridade) ---
+const CrosswordGame = ({ level, onComplete }: { level: number, onComplete: () => void }) => {
+  const [puzzle, setPuzzle] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [userGrid, setUserGrid] = useState<string[][]>([]);
+  const [selectedCell, setSelectedCell] = useState<{ r: number, c: number } | null>(null);
+
+  useEffect(() => {
+    const loadPuzzle = async () => {
+      setLoading(true);
+      const data = await generateCrossword(level);
+      if (data) {
+        setPuzzle(data);
+        setUserGrid(Array(12).fill(null).map(() => Array(12).fill('')));
+      }
+      setLoading(false);
+    };
+    loadPuzzle();
+  }, [level]);
+
+  const handleCellInput = (r: number, c: number, val: string) => {
+    const newGrid = [...userGrid];
+    newGrid[r][c] = val.toUpperCase().slice(0, 1);
+    setUserGrid(newGrid);
+    if (!puzzle) return;
+    let allCorrect = true;
+    puzzle.words.forEach((w: any) => {
+      for (let i = 0; i < w.word.length; i++) {
+        const row = w.direction === 'across' ? w.row : w.row + i;
+        const col = w.direction === 'across' ? w.col + i : w.col;
+        if (newGrid[row][col] !== w.word[i].toUpperCase()) allCorrect = false;
+      }
+    });
+    if (allCorrect) onComplete();
+  };
+
+  if (loading) return <LoadingOverlay message="Desenhando o Pergaminho..." />;
+  if (!puzzle) return <div className="text-center p-20 opacity-20">Falha ao carregar desafio.</div>;
+
+  return (
+    <div className="space-y-12 animate-in fade-in duration-700 pb-20 max-w-4xl mx-auto">
+      <div className="text-center space-y-2">
+        <h3 className="text-4xl font-black bible-text italic text-white uppercase tracking-tighter">Cruzadinha</h3>
+        <p className="text-[10px] text-amber-500 font-black uppercase tracking-[0.5em]">{puzzle.theme}</p>
+      </div>
+      <div className="flex flex-col lg:flex-row gap-10 items-start">
+        <div className="grid grid-cols-12 gap-1 bg-white/5 p-3 rounded-2xl border border-white/10 mx-auto">
+          {userGrid.map((row, r) => row.map((cell, c) => {
+            const isWordCell = puzzle.words.some((w: any) => {
+              if (w.direction === 'across') return r === w.row && c >= w.col && c < w.col + w.word.length;
+              return c === w.col && r === w.row + (r - w.row) && r >= w.row && r < w.row + w.word.length;
+            });
+            if (!isWordCell) return <div key={`${r}-${c}`} className="w-5 h-5 lg:w-8 lg:h-8 rounded-sm bg-black/40" />;
+            return (
+              <input key={`${r}-${c}`} type="text" maxLength={1} value={userGrid[r][c]}
+                onChange={(e) => handleCellInput(r, c, e.target.value)} onFocus={() => setSelectedCell({ r, c })}
+                className={`w-5 h-5 lg:w-8 lg:h-8 rounded-sm text-center font-black uppercase outline-none text-[10px] lg:text-base transition-all ${selectedCell?.r === r && selectedCell?.c === c ? 'bg-amber-600 text-black' : 'bg-white/5 text-white'}`}
+              />
+            );
+          }))}
+        </div>
+        <div className="flex-1 space-y-6 w-full px-4">
+          {['across', 'down'].map(dir => (
+            <div key={dir} className="space-y-2">
+              <h4 className="text-[9px] font-black text-amber-500 uppercase tracking-widest">{dir === 'across' ? 'Horizontal' : 'Vertical'}</h4>
+              {puzzle.words.filter((w: any) => w.direction === dir).map((w: any, i: number) => (
+                <div key={i} className="text-[10px] text-gray-500 bg-white/[0.03] p-3 rounded-lg border border-white/5">{w.clue}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'bible' | 'harpa' | 'games'>('bible');
+  const [gamesSubTab, setGamesSubTab] = useState<'mosaic' | 'crossword'>('mosaic');
+  const [isMosaicActive, setIsMosaicActive] = useState(false);
+  const [testamentFilter, setTestamentFilter] = useState<'Todos' | 'Velho' | 'Novo'>('Todos');
+  const [currentBook, setCurrentBook] = useState('Salmos');
+  const [currentChapter, setCurrentChapter] = useState(23);
+  
+  const [verses, setVerses] = useState<any[]>([]);
   const [hymns, setHymns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [hymnSearch, setHymnSearch] = useState('');
   const [selectedHymn, setSelectedHymn] = useState<any | null>(null);
 
-  const [dbStatus, setDbStatus] = useState({ ok: false, tableHymns: true });
-  const [selectedVerse, setSelectedVerse] = useState<any | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
-  const [manualJson, setManualJson] = useState('');
-  const [isImporting, setIsImporting] = useState(false);
+  const [selectedVerse, setSelectedVerse] = useState<any | null>(null);
+  const [fontScale, setFontScale] = useState(1.0);
+
+  const [currentGameLevel, setCurrentGameLevel] = useState(1);
+  const [currentMosaicLevel, setCurrentMosaicLevel] = useState(1);
+  const [completedCrosswords, setCompletedCrosswords] = useState<number[]>([]);
+  const [completedMosaics, setCompletedMosaics] = useState<number[]>([]);
+  const [showLevelComplete, setShowLevelComplete] = useState(false);
+
+  const [isReading, setIsReading] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
+    const init = async () => {
+      const test = await testDatabaseConnection();
+      if (test.success) loadBibleContent();
+      const savedCross = localStorage.getItem('agape_cross_v1');
+      const savedMosaic = localStorage.getItem('agape_mosaic_v1');
+      if (savedCross) setCompletedCrosswords(JSON.parse(savedCross));
+      if (savedMosaic) setCompletedMosaics(JSON.parse(savedMosaic));
+    };
     init();
   }, []);
 
   useEffect(() => {
-    if (dbStatus.ok) {
-      if (activeTab === 'bible') loadBibleContent();
-      if (activeTab === 'harpa') loadHymns();
-    }
-  }, [currentBook, currentChapter, activeTab, hymnSearch, dbStatus.ok]);
-
-  const init = async () => {
-    const test = await testDatabaseConnection();
-    let hymnsExist = true;
-    const { error: hError } = await supabase.from('hymns').select('id').limit(1);
-    if (hError && (hError.code === 'PGRST116' || hError.message.includes('does not exist'))) hymnsExist = false;
-    
-    setDbStatus({ ok: test.success, tableHymns: hymnsExist });
-    if (test.success && activeTab === 'bible') loadBibleContent();
-  };
+    if (activeTab === 'bible') loadBibleContent();
+    if (activeTab === 'harpa') loadHymns();
+  }, [currentBook, currentChapter, activeTab, hymnSearch]);
 
   const loadBibleContent = async () => {
     setLoading(true);
@@ -64,306 +310,212 @@ const App: React.FC = () => {
         }
       }
       setVerses(data);
-    } catch (e) {
-      console.error(e);
-    } finally { setLoading(false); }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
   };
 
   const loadHymns = async () => {
-    if (!dbStatus.tableHymns) return;
     const data = await fetchHymns(hymnSearch);
     setHymns(data);
   };
 
-  const handleImport = async () => {
-    if (!manualJson) return;
-    setIsImporting(true);
+  const playAudio = async () => {
+    if (isReading) { audioContextRef.current?.close(); setIsReading(false); return; }
+    setIsReading(true);
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
-      const data = JSON.parse(manualJson);
-      const toSave: any[] = [];
-      Object.keys(data).forEach(key => {
-        if (key === "-1") return;
-        const item = data[key];
-        let lyrics = "";
-        if (item.verses) {
-          Object.keys(item.verses).sort((a,b) => parseInt(a)-parseInt(b)).forEach(vk => {
-            lyrics += `${vk}. ${item.verses[vk].replace(/<br>/g, '\n')}\n\n`;
-            if (vk === "1" && item.coro) lyrics += `CORO:\n${item.coro.replace(/<br>/g, '\n')}\n\n`;
-          });
-        }
-        toSave.push({ number: parseInt(key), title: item.hino?.split(' - ')[1] || item.hino, lyrics });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Leitura de ${currentBook} ${currentChapter}. ${verses.map(v => v.text).join(' ')}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+        },
       });
-      await saveHymnsBulk(toSave);
-      alert("Importação Concluída!");
-      setManualJson('');
-      loadHymns();
-    } catch (e) { alert("Erro no JSON"); }
-    finally { setIsImporting(false); }
+      const base64 = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64) {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        audioContextRef.current = ctx;
+        const buffer = await decodeAudioData(decode(base64), ctx, 24000, 1);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.onended = () => setIsReading(false);
+        source.start();
+      }
+    } catch (e) { setIsReading(false); }
   };
 
+  const NavItem = ({ id, label, icon: Icon, active, onClick }: any) => (
+    <button onClick={onClick} className={`w-full flex items-center gap-5 p-6 transition-all border-b border-white/[0.03] ${active ? 'bg-amber-600 text-black' : 'text-gray-500 hover:text-white bg-transparent'}`}>
+      <Icon size={24} className={active ? 'text-black' : 'text-amber-500'} />
+      <span className="text-[11px] font-black uppercase tracking-[0.2em]">{label}</span>
+    </button>
+  );
+
+  const filteredBooks = useMemo(() => BIBLE_BOOKS_MASTER.filter(b => testamentFilter === 'Todos' || b.testament === testamentFilter), [testamentFilter]);
+
   return (
-    <div className="flex h-screen w-full bg-[#050505] text-[#e5e5e5] font-sans overflow-hidden flex-col lg:flex-row">
+    <div className="flex h-screen w-full bg-[#020202] text-[#e5e5e5] font-sans overflow-hidden">
       
-      {/* Sidebar - Desktop (Hidden on Mobile) */}
-      <aside className={`fixed inset-0 lg:relative lg:inset-auto z-50 w-full lg:w-72 flex flex-col border-r border-white/5 bg-[#080808] transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-6 lg:p-8 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-amber-700 rounded-xl flex items-center justify-center shadow-lg shadow-amber-900/20">
-              <BookMarked className="w-6 h-6 text-black" />
-            </div>
-            <h1 className="text-lg font-black italic bible-text text-amber-500 tracking-tighter uppercase">BÍBLIA ÁGAPE</h1>
-          </div>
-          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-gray-500 hover:text-white">
-            <X size={24} />
-          </button>
-        </div>
-
-        <nav className="px-4 space-y-2 mb-6 hidden lg:block">
-          <button 
-            onClick={() => setActiveTab('bible')}
-            className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${activeTab === 'bible' ? 'bg-amber-500/10 text-amber-500 shadow-inner' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            <BookOpen className="w-5 h-5" />
-            <span className="text-[10px] tracking-[0.2em] font-black uppercase">Escrituras</span>
-          </button>
-          <button 
-            onClick={() => { setActiveTab('harpa'); setSelectedHymn(null); }}
-            className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${activeTab === 'harpa' ? 'bg-amber-500/10 text-amber-500 shadow-inner' : 'text-gray-500 hover:text-gray-300'}`}
-          >
-            <Music className="w-5 h-5" />
-            <span className="text-[10px] tracking-[0.2em] font-black uppercase">Harpa Cristã</span>
-          </button>
-        </nav>
-
-        {/* List Content (Books or Hymns) */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-2 space-y-1">
-          {activeTab === 'bible' ? (
-            <div className="space-y-4">
-               <span className="text-[9px] font-black text-amber-500/40 uppercase tracking-widest block mb-4">Selecione o Livro</span>
-               {BIBLE_BOOKS_MASTER.map(book => (
-                <button 
-                  key={book.name} 
-                  onClick={() => { setCurrentBook(book.name); setCurrentChapter(1); setIsSidebarOpen(false); }}
-                  className={`w-full text-left p-3 rounded-xl text-xs font-bold transition-all flex items-center justify-between group ${currentBook === book.name ? 'text-white bg-white/5' : 'text-gray-600 hover:text-gray-400'}`}
-                >
-                  <span className="bible-text italic truncate">{book.name}</span>
-                  {currentBook === book.name && <ChevronRight size={14} className="text-amber-500" />}
-                </button>
-               ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="sticky top-0 bg-[#080808] pb-4 z-10">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
-                  <input 
-                    type="text" 
-                    placeholder="Número ou título..." 
-                    value={hymnSearch}
-                    onChange={e => setHymnSearch(e.target.value)}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm outline-none focus:border-amber-500/30 transition-all text-white"
-                  />
-                </div>
+      {/* SIDEBAR UNIFICADA */}
+      {!isMosaicActive && (
+        <aside className={`fixed inset-y-0 left-0 z-50 w-80 lg:w-96 bg-[#080808] border-r border-white/5 transition-transform duration-500 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="flex flex-col h-full overflow-hidden">
+            <div className="p-10 flex items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-4">
+                <Compass className="w-8 h-8 text-amber-500" />
+                <h1 className="text-sm font-black tracking-[0.5em] text-white">ÁGAPE</h1>
               </div>
-              {hymns.map(h => (
-                <button 
-                  key={h.number} 
-                  onClick={() => { setSelectedHymn(h); setIsSidebarOpen(false); }}
-                  className={`w-full text-left p-4 rounded-xl flex items-center gap-4 transition-all ${selectedHymn?.number === h.number ? 'bg-amber-500/5 text-amber-500' : 'text-gray-600 hover:bg-white/5 hover:text-gray-300'}`}
-                >
-                  <span className="text-xs font-black opacity-30 w-8">{h.number}</span>
-                  <span className="text-sm font-bold truncate">{h.title}</span>
-                </button>
-              ))}
+              <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-gray-500"><X size={24} /></button>
             </div>
-          )}
-        </div>
 
-        {/* Footer Sidebar */}
-        <div className="p-6 border-t border-white/5 flex items-center justify-between">
-           <button onClick={() => setShowSettings(!showSettings)} className="p-2 text-gray-600 hover:text-amber-500 transition-colors">
-              <Settings size={20} />
-           </button>
-           <div className="flex flex-col items-end">
-              <span className="text-[9px] font-black text-gray-700 uppercase">Versão 3.1</span>
-              <span className="text-[9px] text-amber-500/50 font-bold tracking-widest">ÁGAPE</span>
-           </div>
-        </div>
-      </aside>
+            <div className="flex-1 flex flex-col overflow-hidden">
+               <div className="shrink-0 bg-black/40">
+                  <NavItem id="bible" label="Escrituras" icon={BookOpen} active={activeTab === 'bible'} onClick={() => setActiveTab('bible')} />
+                  <NavItem id="games" label="Jornada" icon={Gamepad2} active={activeTab === 'games'} onClick={() => setActiveTab('games')} />
+                  <NavItem id="harpa" label="Louvor" icon={Music} active={activeTab === 'harpa'} onClick={() => setActiveTab('harpa')} />
+               </div>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col relative bg-[#050505] overflow-hidden pb-20 lg:pb-0">
+               <div className="flex-1 overflow-y-auto custom-scrollbar bg-black/10">
+                  {activeTab === 'bible' && (
+                    <div className="p-4 space-y-4">
+                      <div className="flex justify-between px-4 sticky top-0 bg-[#080808] py-3 z-10 border-b border-white/5">
+                        {['Todos', 'Velho', 'Novo'].map(t => (
+                          <button key={t} onClick={() => setTestamentFilter(t as any)} className={`text-[9px] font-black uppercase tracking-widest ${testamentFilter === t ? 'text-amber-500 border-b border-amber-500 pb-1' : 'text-gray-600'}`}>{t}</button>
+                        ))}
+                      </div>
+                      {filteredBooks.map(book => (
+                        <button key={book.name} onClick={() => { setCurrentBook(book.name); setCurrentChapter(1); setIsSidebarOpen(false); }} className={`w-full text-left py-4 px-6 rounded-2xl flex items-center justify-between group ${currentBook === book.name ? 'bg-white/[0.03] text-white' : 'text-gray-500'}`}>
+                          <span className="bible-text italic truncate text-2xl">{book.name}</span>
+                          {currentBook === book.name && <div className="w-2 h-2 rounded-full bg-amber-500" />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {activeTab === 'games' && (
+                    <div className="p-8 space-y-8">
+                      <div className="flex flex-col gap-2">
+                        <button onClick={() => setGamesSubTab('mosaic')} className={`w-full py-5 rounded-2xl flex items-center gap-4 px-6 transition-all ${gamesSubTab === 'mosaic' ? 'bg-amber-600/10 text-amber-500' : 'bg-white/5 text-gray-500'}`}>
+                          <ImageIcon size={20} /><span className="text-[10px] font-black uppercase">Mosaicos</span>
+                        </button>
+                        <button onClick={() => setGamesSubTab('crossword')} className={`w-full py-5 rounded-2xl flex items-center gap-4 px-6 transition-all ${gamesSubTab === 'crossword' ? 'bg-amber-600/10 text-amber-500' : 'bg-white/5 text-gray-500'}`}>
+                          <TypeIcon size={20} /><span className="text-[10px] font-black uppercase">Cruzadas</span>
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {Array.from({ length: 60 }, (_, i) => i + 1).map(lv => {
+                          const isComp = (gamesSubTab === 'mosaic' ? completedMosaics : completedCrosswords).includes(lv);
+                          const isAct = (gamesSubTab === 'mosaic' ? currentMosaicLevel : currentGameLevel) === lv;
+                          return (
+                            <button key={lv} onClick={() => { if (gamesSubTab === 'mosaic') { setCurrentMosaicLevel(lv); setIsMosaicActive(true); } else setCurrentGameLevel(lv); setIsSidebarOpen(false); }}
+                              className={`aspect-square rounded-xl text-[10px] font-black flex items-center justify-center ${isAct ? 'bg-amber-600 text-black' : isComp ? 'bg-green-500/10 text-green-500' : 'bg-white/5 text-gray-600'}`}>
+                              {lv}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {activeTab === 'harpa' && (
+                    <div className="p-4 space-y-6">
+                      <div className="sticky top-0 bg-[#080808] pb-4 z-10 border-b border-white/5 px-2">
+                        <div className="relative">
+                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-600" />
+                          <input type="text" placeholder="Hino..." value={hymnSearch} onChange={e => setHymnSearch(e.target.value)} className="w-full bg-white/[0.03] border border-white/10 rounded-xl py-3 pl-12 pr-4 text-xs font-bold outline-none focus:border-amber-500/30 text-white" />
+                        </div>
+                      </div>
+                      {hymns.map(h => (
+                        <button key={h.number} onClick={() => { setSelectedHymn(h); setIsSidebarOpen(false); }} className={`w-full text-left p-5 rounded-2xl flex items-center gap-4 ${selectedHymn?.number === h.number ? 'bg-amber-500/10 text-amber-500' : 'text-gray-500'}`}>
+                          <span className="text-[10px] font-black text-amber-500 w-8">{h.number}</span>
+                          <span className="text-sm font-bold truncate">{h.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+               </div>
+            </div>
+          </div>
+        </aside>
+      )}
+
+      {/* ÁREA PRINCIPAL */}
+      <main className="flex-1 flex flex-col relative overflow-hidden">
         
-        {/* Mobile/Tab Header */}
-        <header className="h-16 lg:h-24 border-b border-white/5 flex items-center justify-between px-6 lg:px-10 bg-[#050505]/80 backdrop-blur-xl z-40 sticky top-0">
-           <div className="flex items-center gap-4">
-              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 -ml-2 text-amber-500">
-                <Menu size={24} />
-              </button>
-              <h2 className="text-lg lg:text-3xl font-black bible-text italic text-white uppercase tracking-tight flex items-center gap-2 lg:gap-4">
+        {!isMosaicActive && (
+          <header className="h-24 lg:h-32 glass border-b border-white/5 flex items-center justify-between px-6 lg:px-16 z-40">
+            <div className="flex items-center gap-6">
+                <button onClick={() => setIsSidebarOpen(true)} className="p-4 bg-white/5 rounded-2xl text-amber-500 lg:hidden"><Menu size={24} /></button>
+                <h2 className="text-2xl lg:text-4xl font-black bible-text italic text-white uppercase tracking-tighter">
+                  {activeTab === 'bible' ? <><span className="text-amber-500">{currentBook}</span> <span className="text-gray-700 font-light">/</span> {currentChapter}</> : activeTab === 'harpa' ? 'Harpa' : 'Jornada'}
+                </h2>
+            </div>
+            <div className="flex items-center gap-3">
+                <div className="flex bg-white/5 p-1 rounded-xl">
+                  <button onClick={() => setFontScale(s => Math.max(0.6, s-0.1))} className="p-2 text-gray-500"><ZoomOut size={18} /></button>
+                  <button onClick={() => setFontScale(s => Math.min(2.5, s+0.1))} className="p-2 text-gray-500"><ZoomIn size={18} /></button>
+                </div>
+                {activeTab === 'bible' && (
+                  <button onClick={playAudio} className={`p-4 rounded-2xl ${isReading ? 'bg-amber-600 text-black' : 'bg-white/5 text-amber-500'}`}><Volume2 size={24} /></button>
+                )}
+            </div>
+          </header>
+        )}
+
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+           {loading ? <LoadingOverlay message="Buscando Visão no Santuário..." /> : (
+             <div className={`${isMosaicActive ? '' : 'max-w-4xl mx-auto py-12 lg:py-24 px-6 pb-40'}`}>
                 {activeTab === 'bible' ? (
-                  <>
-                    <span className="text-amber-500 truncate max-w-[120px] md:max-w-none">{currentBook}</span>
-                    <span className="text-gray-700">/</span>
-                    <span className="text-white">{currentChapter}</span>
-                  </>
-                ) : (
-                  <span className="text-amber-500">HARPA CRISTÃ</span>
-                )}
-              </h2>
-           </div>
-
-           {/* Chapter Selector (Horizontal Scroll) */}
-           {activeTab === 'bible' && (
-             <div className="flex gap-2 overflow-x-auto no-scrollbar max-w-[120px] sm:max-w-[200px] md:max-w-md bg-white/5 p-1 rounded-full border border-white/5">
-                {Array.from({length: BIBLE_BOOKS_MASTER.find(b => b.name === currentBook)?.chapters || 0}, (_, i) => i + 1).map(chap => (
-                  <button 
-                    key={chap} 
-                    onClick={() => { setCurrentChapter(chap); setSelectedVerse(null); }}
-                    className={`w-8 h-8 md:w-10 md:h-10 rounded-full text-[10px] md:text-xs font-black transition-all flex items-center justify-center shrink-0 ${currentChapter === chap ? 'bg-amber-600 text-black shadow-lg shadow-amber-900/20' : 'text-gray-500 hover:text-white'}`}
-                  >
-                    {chap}
-                  </button>
-                ))}
-             </div>
-           )}
-        </header>
-
-        {/* Scrolling Text Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar relative">
-           {activeTab === 'bible' ? (
-             <div className="max-w-3xl mx-auto py-12 lg:py-24 px-6 lg:px-8 pb-32">
-                {loading ? (
-                  <div className="py-32 flex flex-col items-center gap-4 opacity-20">
-                    <Loader2 className="animate-spin text-amber-600 w-12 h-12" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Sincronizando Escrituras...</span>
-                  </div>
-                ) : (
-                  <div className="space-y-8 lg:space-y-12">
-                    {verses.map((v) => (
-                      <div 
-                        key={v.verse} 
-                        onClick={() => setSelectedVerse(v)}
-                        className={`group relative p-4 lg:p-6 rounded-2xl lg:rounded-[2.5rem] transition-all border border-transparent ${selectedVerse?.verse === v.verse ? 'bg-amber-500/5 border-amber-500/10 shadow-inner' : 'hover:bg-white/5'}`}
-                      >
-                         <p className="bible-text text-xl md:text-2xl lg:text-4xl font-light leading-relaxed text-gray-400 group-hover:text-white transition-colors">
-                            <sup className="text-amber-600/40 font-black mr-4 lg:mr-8 text-xs lg:text-sm italic">{v.verse}</sup>
-                            {v.text}
-                         </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-             </div>
-           ) : (
-             <div className="max-w-4xl mx-auto py-12 lg:py-24 px-6 lg:px-10 pb-32">
-               {selectedHymn ? (
-                 <div className="space-y-12 lg:space-y-20 animate-in fade-in slide-in-from-bottom-6 duration-700">
-                    <div className="text-center space-y-4">
-                       <button onClick={() => setSelectedHymn(null)} className="lg:hidden mb-4 p-2 text-gray-500 flex items-center gap-2 mx-auto uppercase text-[10px] font-black tracking-widest">
-                          <ChevronLeft size={16} /> Voltar para lista
-                       </button>
-                       <span className="text-amber-500/40 font-black text-[10px] lg:text-xs tracking-[0.5em] uppercase">Hino {selectedHymn.number}</span>
-                       <h3 className="text-3xl md:text-5xl lg:text-8xl font-black bible-text italic text-white uppercase tracking-tighter leading-tight">{selectedHymn.title}</h3>
-                       <div className="w-16 lg:w-32 h-px bg-amber-500/20 mx-auto mt-6"></div>
+                   <div className="space-y-10">
+                     {verses.map((v) => (
+                        <div key={v.verse} className="group relative py-6 px-8 rounded-[2rem] hover:bg-white/[0.02] transition-all">
+                           <p className="bible-text font-light leading-[1.8] text-gray-400 group-hover:text-white" style={{ fontSize: `${28 * fontScale}px` }}>
+                              <sup className="text-amber-500/40 font-black mr-6 italic">{v.verse}</sup>{v.text}
+                           </p>
+                        </div>
+                     ))}
+                   </div>
+                ) : activeTab === 'harpa' ? (
+                  selectedHymn ? (
+                    <div className="space-y-16 animate-in slide-in-from-bottom-12 text-center">
+                       <div className="space-y-4">
+                          <h3 className="text-5xl lg:text-7xl font-black bible-text italic text-white uppercase tracking-tighter">{selectedHymn.title}</h3>
+                          <p className="text-amber-500 font-black tracking-[0.8em] text-xs uppercase">HINO Nº {selectedHymn.number}</p>
+                       </div>
+                       <div className="bg-[#050505] rounded-[4rem] p-12 lg:p-20 border border-white/5 text-gray-300 italic text-2xl lg:text-3xl leading-[2.2] whitespace-pre-line" style={{ fontSize: `${24 * fontScale}px` }}>
+                          {selectedHymn.lyrics}
+                       </div>
                     </div>
-                    <div className="bg-[#080808] rounded-3xl lg:rounded-[5rem] p-8 lg:p-20 border border-white/5 shadow-2xl relative overflow-hidden">
-                       <p className="bible-text text-xl md:text-3xl lg:text-5xl font-light leading-[1.7] lg:leading-[1.8] text-gray-300 whitespace-pre-line italic text-center">
-                         {selectedHymn.lyrics}
-                       </p>
-                    </div>
-                 </div>
-               ) : (
-                 <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-8 opacity-10">
-                    <Music className="w-20 lg:w-32 h-20 lg:h-32 text-amber-500" />
-                    <p className="text-[10px] lg:text-xs font-black tracking-[0.8em] uppercase">Selecione um hino para adorar</p>
-                 </div>
-               )}
+                  ) : <EmptyState icon={Music} title="Harpa de Sião" />
+                ) : (
+                  gamesSubTab === 'mosaic' ? ( isMosaicActive && <MosaicPuzzle level={currentMosaicLevel} onComplete={() => setShowLevelComplete(true)} onExit={() => setIsMosaicActive(false)} /> ) 
+                  : ( <CrosswordGame level={currentGameLevel} onComplete={() => setShowLevelComplete(true)} /> )
+                )}
              </div>
            )}
         </div>
 
-        {/* Mobile Bottom Navigation */}
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 h-20 bg-[#080808] border-t border-white/5 flex items-center justify-around px-6 z-50 backdrop-blur-xl bg-opacity-95">
-           <button 
-             onClick={() => { setActiveTab('bible'); setSelectedHymn(null); }}
-             className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'bible' ? 'text-amber-500' : 'text-gray-600'}`}
-           >
-              <BookOpen size={20} />
-              <span className="text-[8px] font-black uppercase tracking-widest">Bíblia</span>
-           </button>
-           <div className="w-px h-8 bg-white/5"></div>
-           <button 
-             onClick={() => setActiveTab('harpa')}
-             className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'harpa' ? 'text-amber-500' : 'text-gray-600'}`}
-           >
-              <Music size={20} />
-              <span className="text-[8px] font-black uppercase tracking-widest">Harpa</span>
-           </button>
-           <div className="w-px h-8 bg-white/5"></div>
-           <button 
-             onClick={() => setIsSidebarOpen(true)}
-             className="flex flex-col items-center gap-1 text-gray-600"
-           >
-              <Menu size={20} />
-              <span className="text-[8px] font-black uppercase tracking-widest">Acervo</span>
-           </button>
-        </nav>
-
-        {/* Modal Configurações */}
-        {showSettings && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-             <div className="w-full max-w-2xl bg-[#0a0a0a] rounded-[2rem] lg:rounded-[3rem] border border-white/10 p-8 lg:p-12 space-y-8 relative shadow-2xl overflow-y-auto max-h-[90vh]">
-                <button onClick={() => setShowSettings(false)} className="absolute top-6 lg:top-8 right-6 lg:right-8 text-gray-500 hover:text-white p-2">
-                  <X size={24} />
-                </button>
+        {showLevelComplete && (
+          <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-8 backdrop-blur-3xl animate-in zoom-in-95">
+             <div className="w-full max-w-sm bg-[#0a0a0a] rounded-[4rem] border border-amber-500/30 p-16 text-center space-y-10">
+                <div className="w-24 h-24 bg-amber-600 rounded-[3rem] mx-auto flex items-center justify-center text-black shadow-2xl animate-bounce"><Trophy size={48} /></div>
                 <div className="space-y-2">
-                   <h3 className="text-xl lg:text-2xl font-black bible-text italic text-amber-500 uppercase">Configurações Ágape</h3>
-                   <p className="text-[10px] text-gray-600 font-black uppercase tracking-widest">Importação de Dados Externos</p>
+                   <h3 className="text-3xl font-black bible-text italic text-white uppercase tracking-tighter">Vitória!</h3>
+                   <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Desafio Concluído</p>
                 </div>
-                
-                <div className="space-y-6">
-                   <div className="space-y-2">
-                      <label className="text-[9px] font-black text-gray-500 uppercase ml-2">Importar Acervo Harpa (JSON)</label>
-                      <textarea 
-                        value={manualJson}
-                        onChange={e => setManualJson(e.target.value)}
-                        placeholder="Cole aqui o conteúdo do arquivo JSON..."
-                        className="w-full h-32 lg:h-48 bg-black border border-white/5 rounded-2xl p-6 text-[11px] font-mono outline-none focus:border-amber-500/40 text-gray-400 custom-scrollbar"
-                      />
-                   </div>
-                   <button 
-                    onClick={handleImport}
-                    disabled={isImporting || !manualJson}
-                    className="w-full py-5 lg:py-6 bg-white/5 border border-white/10 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-white/10 transition-all flex items-center justify-center gap-3 active:scale-95"
-                   >
-                      {isImporting ? <Loader2 className="animate-spin" /> : <ClipboardCheck size={16} />} 
-                      {isImporting ? "PROCESSANDO..." : "INICIAR IMPORTAÇÃO"}
-                   </button>
-                </div>
-
-                {!dbStatus.tableHymns && (
-                   <div className="p-6 bg-red-500/10 rounded-2xl border border-red-500/20 flex items-start gap-4 text-red-500">
-                      <AlertCircle className="shrink-0 mt-1" />
-                      <div className="flex-1">
-                         <p className="text-[11px] font-black uppercase">Conexão Incompleta</p>
-                         <p className="text-[10px] opacity-70 leading-relaxed mt-1">A base de dados da Harpa não foi detectada. Verifique as tabelas do seu Supabase.</p>
-                      </div>
-                   </div>
-                )}
+                <button onClick={() => { setShowLevelComplete(false); if (gamesSubTab === 'mosaic') { setCurrentMosaicLevel(prev => prev + 1); } else { setCurrentGameLevel(prev => prev + 1); } }}
+                  className="w-full py-6 bg-white text-black rounded-3xl font-black uppercase text-[10px] tracking-[0.5em] hover:bg-amber-500 transition-all">AVANÇAR</button>
              </div>
           </div>
         )}
       </main>
 
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, 0.15); border-radius: 10px; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, 0.1); border-radius: 10px; }
         .bible-text { font-family: 'Crimson Pro', serif; }
-        @media (max-width: 1024px) {
-          .custom-scrollbar::-webkit-scrollbar { width: 0px; }
-        }
+        .glass { background: rgba(2, 2, 2, 0.98); backdrop-filter: blur(60px); -webkit-backdrop-filter: blur(60px); }
+        @media (max-width: 1024px) { .custom-scrollbar::-webkit-scrollbar { width: 0px; } }
       `}</style>
     </div>
   );

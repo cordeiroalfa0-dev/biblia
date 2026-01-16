@@ -53,50 +53,6 @@ export async function fetchBooks() {
   }
 }
 
-export async function fetchAllStoredChapterKeys(): Promise<Set<string>> {
-  try {
-    const { data, error } = await supabase.from('reading_progress').select('book_name, chapter');
-    if (error) throw error;
-    return new Set(data.map(v => `${v.book_name}-${v.chapter}`));
-  } catch (e) {
-    return new Set();
-  }
-}
-
-export async function fetchAllStoredHymnNumbers(): Promise<Set<number>> {
-  try {
-    const { data, error } = await supabase.from('hymns').select('number');
-    if (error) throw error;
-    return new Set(data.map(v => v.number));
-  } catch (e) {
-    return new Set();
-  }
-}
-
-export async function countStoredChapters(): Promise<number> {
-  try {
-    const { count, error } = await supabase
-      .from('reading_progress')
-      .select('*', { count: 'exact', head: true });
-    if (error) throw error;
-    return count || 0;
-  } catch (e) {
-    return 0;
-  }
-}
-
-export async function countHymns(): Promise<number> {
-  try {
-    const { count, error } = await supabase
-      .from('hymns')
-      .select('*', { count: 'exact', head: true });
-    if (error) throw error;
-    return count || 0;
-  } catch (e) {
-    return 0;
-  }
-}
-
 export async function testDatabaseConnection(): Promise<{success: boolean, message: string}> {
   try {
     const { error } = await supabase.from('verses').select('id').limit(1);
@@ -143,35 +99,26 @@ export async function fetchHymns(search?: string) {
   return data || [];
 }
 
-export async function saveHymn(hymn: { number: number, title: string, lyrics: string }) {
-  const { error } = await supabase.from('hymns').upsert(hymn, { onConflict: 'number' });
-  if (error) throw error;
-}
-
-export async function saveHymnsBulk(hymns: { number: number, title: string, lyrics: string }[]) {
-    // Quebra em pedaços de 100 para evitar limites de payload
-    const chunkSize = 100;
-    for (let i = 0; i < hymns.length; i += chunkSize) {
-        const chunk = hymns.slice(i, i + chunkSize);
-        const { error } = await supabase.from('hymns').upsert(chunk, { onConflict: 'number' });
-        if (error) throw error;
-    }
-}
-
-export async function saveMessage(role: 'user' | 'assistant', content: string) {
-  await supabase.from('messages').insert({ role, content });
-}
-
-export async function fetchMessages() {
-  const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true });
-  return data || [];
-}
-
 export async function updateReadingProgress(book_name: string, chapter: number) {
   await supabase.from('reading_progress').upsert({ book_name, chapter }, { onConflict: 'book_name,chapter' });
 }
 
-export async function fetchReadingProgress() {
-  const { data } = await supabase.from('reading_progress').select('*');
-  return data || [];
+// Funções para Gerenciamento de Imagens do Mosaico
+export async function getStoredMosaicImage(level: number) {
+  const { data, error } = await supabase
+    .from('mosaic_images')
+    .select('image_data, theme')
+    .eq('level', level)
+    .single();
+  
+  if (error) return null;
+  return data;
+}
+
+export async function saveMosaicImage(level: number, theme: string, imageData: string) {
+  const { error } = await supabase
+    .from('mosaic_images')
+    .upsert({ level, theme, image_data: imageData }, { onConflict: 'level' });
+  
+  if (error) console.error("Erro ao salvar imagem no banco:", error);
 }

@@ -2,6 +2,7 @@
   "name": "Bíblia de Estudo Ágape",
   "description": "Uma experiência purista de leitura das Escrituras Sagradas e Harpa Cristã, focada em reverência e clareza.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "microphone"
   ]
 }

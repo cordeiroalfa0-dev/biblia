@@ -39,13 +39,24 @@ CREATE TABLE IF NOT EXISTS public.messages (
     created_at timestamptz default now()
 );
 
--- 5. Permissões de Acesso (Desabilita RLS para facilitar o uso do App)
+-- 5. NOVO: Tabela de Imagens do Mosaico (Cache de Visões)
+CREATE TABLE IF NOT EXISTS public.mosaic_images (
+    id bigint primary key generated always as identity,
+    level int unique not null,
+    theme text not null,
+    image_data text not null, -- Armazena a string base64
+    created_at timestamptz default now()
+);
+
+-- 6. Permissões de Acesso (Desabilita RLS para facilitar o uso do App)
 ALTER TABLE IF EXISTS public.hymns DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.verses DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.reading_progress DISABLE ROW LEVEL SECURITY;
 ALTER TABLE IF EXISTS public.messages DISABLE ROW LEVEL SECURITY;
+ALTER TABLE IF EXISTS public.mosaic_images DISABLE ROW LEVEL SECURITY;
 
 GRANT ALL ON TABLE public.hymns TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.verses TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.reading_progress TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.messages TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.mosaic_images TO anon, authenticated, service_role;
