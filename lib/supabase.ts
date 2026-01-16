@@ -122,3 +122,46 @@ export async function saveMosaicImage(level: number, theme: string, imageData: s
   
   if (error) console.error("Erro ao salvar imagem no banco:", error);
 }
+
+export async function fetchAllMosaicImages() {
+  const { data, error } = await supabase
+    .from('mosaic_images')
+    .select('*')
+    .order('level', { ascending: true });
+  
+  if (error) {
+    console.error("Erro ao buscar galeria:", error);
+    return [];
+  }
+  return data || [];
+}
+
+// Funções para Gerenciamento de Palavras Cruzadas
+export async function getStoredCrossword(level: number) {
+  const { data, error } = await supabase
+    .from('crossword_puzzles')
+    .select('puzzle_data, theme')
+    .eq('level', level)
+    .single();
+  
+  if (error) return null;
+  return data;
+}
+
+export async function saveCrossword(level: number, theme: string, puzzleData: any) {
+  const { error } = await supabase
+    .from('crossword_puzzles')
+    .upsert({ level, theme, puzzle_data: puzzleData }, { onConflict: 'level' });
+  
+  if (error) console.error("Erro ao salvar cruzadinha no banco:", error);
+}
+
+export async function fetchAllCrosswords() {
+  const { data, error } = await supabase
+    .from('crossword_puzzles')
+    .select('level, theme')
+    .order('level', { ascending: true });
+  
+  if (error) return [];
+  return data || [];
+}
