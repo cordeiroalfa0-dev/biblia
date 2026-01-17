@@ -4,7 +4,8 @@ import {
   BookOpen, Music, Loader2, X, Compass, Sparkles, Menu, ZoomIn, ZoomOut, 
   Gamepad2, Trophy, Eye, Move, RefreshCw, Hammer, ScrollText, AlertCircle, Database, 
   Zap, Trash2, ChevronRight, ChevronLeft, Layers, CheckCircle2, Maximize2, Image as ImageIcon,
-  Sparkle, Play, Wand2, Plus, AlertTriangle, Terminal, AlertOctagon, ArrowLeft, Check, Grid3X3
+  Sparkle, Play, Wand2, Plus, AlertTriangle, Terminal, AlertOctagon, ArrowLeft, Check, Grid3X3,
+  Box
 } from 'lucide-react';
 import { 
   fetchVerses, saveVerses, testDatabaseConnection, 
@@ -56,85 +57,163 @@ const LoadingOverlay = ({ message = "Carregando..." }) => (
   </div>
 );
 
-// --- COMPONENTE DO QUEBRA-CABEÇA (MOSAICO) ---
+// --- COMPONENTE DO QUEBRA-CABEÇA (MOSAICO) ATUALIZADO (5x5 + Bandeja) ---
 const MosaicPuzzle = ({ imageData, theme, onBack }: { imageData: string, theme: string, onBack: () => void }) => {
-  const [pieces, setPieces] = useState<number[]>([]);
-  const [selected, setSelected] = useState<number | null>(null);
+  const size = 5; // 5x5 = 25 peças
+  const totalPieces = size * size;
+  
+  // Peças que estão no tabuleiro (index do grid -> index da imagem)
+  const [board, setBoard] = useState<(number | null)[]>(Array(totalPieces).fill(null));
+  // Peças que ainda estão na bandeja
+  const [tray, setTray] = useState<number[]>([]);
+  // Peça selecionada na bandeja
+  const [selectedPieceIdx, setSelectedPieceIdx] = useState<number | null>(null);
   const [solved, setSolved] = useState(false);
-  const size = 3; // 3x3 grid
 
   useEffect(() => {
-    const initial = Array.from({ length: size * size }, (_, i) => i);
-    // Shuffle logic
-    const shuffled = [...initial].sort(() => Math.random() - 0.5);
-    setPieces(shuffled);
+    // Inicializa bandeja com as 25 peças embaralhadas
+    const allPieces = Array.from({ length: totalPieces }, (_, i) => i);
+    const shuffled = allPieces.sort(() => Math.random() - 0.5);
+    setTray(shuffled);
+    setBoard(Array(totalPieces).fill(null));
+    setSolved(false);
   }, [imageData]);
 
-  const handlePieceClick = (index: number) => {
-    if (solved) return;
-    if (selected === null) {
-      setSelected(index);
-    } else {
-      const newPieces = [...pieces];
-      const temp = newPieces[selected];
-      newPieces[selected] = newPieces[index];
-      newPieces[index] = temp;
-      setPieces(newPieces);
-      setSelected(null);
-      
-      // Check if solved
-      if (newPieces.every((p, i) => p === i)) {
-        setSolved(true);
-      }
+  const placePieceOnBoard = (boardIndex: number) => {
+    if (solved || selectedPieceIdx === null) return;
+    
+    const pieceId = tray[selectedPieceIdx];
+    const newBoard = [...board];
+    
+    // Se o espaço já estiver ocupado, a peça antiga volta para a bandeja
+    const existingPiece = newBoard[boardIndex];
+    
+    newBoard[boardIndex] = pieceId;
+    setBoard(newBoard);
+    
+    // Remove da bandeja e opcionalmente adiciona a antiga
+    const newTray = tray.filter((_, i) => i !== selectedPieceIdx);
+    if (existingPiece !== null) {
+      newTray.push(existingPiece);
+    }
+    
+    setTray(newTray);
+    setSelectedPieceIdx(null);
+    
+    // Verifica vitória
+    if (newBoard.every((p, i) => p === i)) {
+      setSolved(true);
     }
   };
 
+  const returnToTray = (boardIndex: number) => {
+    if (solved) return;
+    const pieceId = board[boardIndex];
+    if (pieceId === null) return;
+
+    const newBoard = [...board];
+    newBoard[boardIndex] = null;
+    setBoard(newBoard);
+    setTray(prev => [...prev, pieceId]);
+  };
+
   return (
-    <div className="space-y-12 animate-in zoom-in-95">
-      <div className="flex flex-col lg:flex-row items-start justify-between gap-8">
-        <div className="space-y-6">
+    <div className="flex flex-col xl:flex-row gap-12 animate-in fade-in duration-700 pb-20">
+      <div className="flex-1 space-y-8">
+        <div className="flex items-center justify-between">
           <button onClick={onBack} className="flex items-center gap-3 text-amber-500 font-black uppercase text-[10px] tracking-widest hover:text-white transition-all">
             <ArrowLeft size={16} /> Voltar à Galeria
           </button>
-          <div className="space-y-2">
-            <span className="text-amber-500 font-black text-xs uppercase tracking-[0.4em] block">QUEBRA-CABEÇA SAGRADO</span>
-            <h3 className="text-4xl lg:text-6xl font-black bible-text italic text-white uppercase tracking-tighter leading-none">{theme}</h3>
-          </div>
+          {solved && (
+            <div className="flex items-center gap-3 text-green-500 font-black uppercase text-xs tracking-widest animate-pulse">
+              <CheckCircle2 size={20} /> Visão Consagrada
+            </div>
+          )}
         </div>
-        {solved && (
-          <div className="bg-green-500/10 border border-green-500/20 p-6 rounded-3xl flex items-center gap-4 animate-bounce">
-            <CheckCircle2 className="text-green-500" />
-            <span className="font-black text-green-500 uppercase text-xs tracking-widest">VISÃO RESTAURADA!</span>
-          </div>
-        )}
+
+        <div className="space-y-2">
+          <h3 className="text-4xl lg:text-7xl font-black bible-text italic text-white uppercase tracking-tighter leading-none">
+            {theme}
+          </h3>
+          <p className="text-[10px] text-amber-500/40 font-black uppercase tracking-[0.5em]">RECONSTRUA A REVELAÇÃO (25 PEÇAS)</p>
+        </div>
+
+        {/* TABULEIRO 5x5 */}
+        <div className={`grid grid-cols-5 gap-1 bg-white/5 p-2 rounded-[2rem] border border-white/5 shadow-2xl aspect-square max-w-[600px] mx-auto xl:mx-0 transition-all ${solved ? 'gap-0 p-0 overflow-hidden ring-4 ring-amber-500/20' : ''}`}>
+          {board.map((pieceId, i) => {
+            if (pieceId === null) {
+              return (
+                <div 
+                  key={i} 
+                  onClick={() => placePieceOnBoard(i)}
+                  className="aspect-square bg-[#0a0a0a] border border-white/5 rounded-lg flex items-center justify-center group cursor-pointer hover:bg-amber-500/5 transition-all"
+                >
+                  <Plus size={16} className="text-white/5 group-hover:text-amber-500/20" />
+                </div>
+              );
+            }
+
+            const row = Math.floor(pieceId / size);
+            const col = pieceId % size;
+            return (
+              <div 
+                key={i}
+                onClick={() => returnToTray(i)}
+                className={`aspect-square relative cursor-pointer transition-all duration-300 ${solved ? 'rounded-none' : 'rounded-lg hover:scale-[0.98]'}`}
+                style={{
+                  backgroundImage: `url(${imageData})`,
+                  backgroundSize: `${size * 100}% ${size * 100}%`,
+                  backgroundPosition: `${(col / (size - 1)) * 100}% ${(row / (size - 1)) * 100}%`
+                }}
+              />
+            );
+          })}
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 bg-[#080808] aspect-square rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl relative max-w-2xl mx-auto lg:mx-0 p-4">
-        {pieces.map((p, i) => {
-          const row = Math.floor(p / size);
-          const col = p % size;
-          return (
-            <div 
-              key={i}
-              onClick={() => handlePieceClick(i)}
-              className={`relative cursor-pointer transition-all duration-300 rounded-xl overflow-hidden border-2 ${selected === i ? 'border-amber-500 scale-95 shadow-[0_0_20px_rgba(245,158,11,0.5)]' : 'border-white/5'} ${solved ? 'border-none' : ''}`}
-              style={{
-                backgroundImage: `url(${imageData})`,
-                backgroundSize: `${size * 100}% ${size * 100}%`,
-                backgroundPosition: `${(col / (size - 1)) * 100}% ${(row / (size - 1)) * 100}%`
-              }}
-            >
-              {!solved && <div className="absolute inset-0 bg-black/20 hover:bg-transparent transition-colors" />}
-            </div>
-          );
-        })}
+      {/* BANDEJA DE PEÇAS (ONDE ESCOLHE) */}
+      <div className="w-full xl:w-96 space-y-6">
+        <div className="bg-[#080808] p-8 rounded-[3rem] border border-white/5 shadow-2xl space-y-8 sticky top-8">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-black uppercase tracking-[0.3em] text-amber-500 flex items-center gap-3">
+              <Layers size={16} /> Relicário
+            </h4>
+            <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">{tray.length} Restantes</span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-3 max-h-[500px] overflow-y-auto pr-4 custom-scrollbar">
+            {tray.length === 0 && !solved && (
+              <div className="col-span-4 py-20 text-center opacity-20">
+                <p className="text-[10px] font-black uppercase tracking-widest">Peças no Tabuleiro</p>
+              </div>
+            )}
+            {tray.map((pieceId, i) => {
+              const row = Math.floor(pieceId / size);
+              const col = pieceId % size;
+              return (
+                <div 
+                  key={i}
+                  onClick={() => setSelectedPieceIdx(i)}
+                  className={`aspect-square rounded-xl cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 border-2 ${selectedPieceIdx === i ? 'border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-110 z-10' : 'border-white/10 opacity-70 hover:opacity-100'}`}
+                  style={{
+                    backgroundImage: `url(${imageData})`,
+                    backgroundSize: `${size * 100}% ${size * 100}%`,
+                    backgroundPosition: `${(col / (size - 1)) * 100}% ${(row / (size - 1)) * 100}%`
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          <div className="pt-4 border-t border-white/5">
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-white/30 leading-relaxed">
+              {selectedPieceIdx !== null 
+                ? "Peça selecionada. Toque em um espaço vazio no tabuleiro."
+                : "Selecione uma peça acima para começar a reconstrução."}
+            </p>
+          </div>
+        </div>
       </div>
-      
-      {!solved && (
-        <p className="text-center lg:text-left text-[10px] font-black uppercase tracking-[0.3em] text-white/20">
-          Clique em duas peças para trocar suas posições e reconstruir a visão.
-        </p>
-      )}
     </div>
   );
 };
@@ -438,7 +517,6 @@ const LevelsDashboard = ({ type, storedData, onPlay, onGenerateOne, onGenerateAl
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'bible' | 'harpa' | 'games'>('bible');
   const [gamesSubTab, setGamesSubTab] = useState<'mosaic' | 'crossword' | 'sanctuary'>('mosaic');
-  // FIX: Added missing 'sanctuaryMode' state to track the active creation type in the Sanctuary
   const [sanctuaryMode, setSanctuaryMode] = useState<'images' | 'crossword'>('images');
   const [isGameActive, setIsGameActive] = useState(false);
   const [currentBook, setCurrentBook] = useState('Salmos');
@@ -588,7 +666,6 @@ const App: React.FC = () => {
                         storedData={galleryImages} 
                         onPlay={(lv) => { setCurrentLevel(lv); setIsGameActive(true); }}
                         onGenerateOne={generateSingleImage}
-                        // FIX: Ensure sanctuaryMode is set correctly when entering the Sanctuary
                         onGenerateAll={() => { setSanctuaryMode('images'); setGamesSubTab('sanctuary'); }}
                       />
                     ) : gamesSubTab === 'crossword' ? (
@@ -604,11 +681,9 @@ const App: React.FC = () => {
                           }
                         }}
                         onGenerateOne={generateSingleCrossword}
-                        // FIX: Ensure sanctuaryMode is set correctly when entering the Sanctuary
                         onGenerateAll={() => { setSanctuaryMode('crossword'); setGamesSubTab('sanctuary'); }}
                       />
                     ) : (
-                      // FIX: Pass sanctuaryMode state and correctly derived levels/callback to SanctuaryManager
                       <SanctuaryManager 
                         type={sanctuaryMode} 
                         storedLevels={(sanctuaryMode === 'images' ? galleryImages : galleryCrosswords).map(g => g.level)} 
