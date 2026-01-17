@@ -43,16 +43,6 @@ export const BIBLE_BOOKS_MASTER = [
   { name: 'Apocalipse', chapters: 22, testament: 'Novo' }
 ];
 
-export async function fetchBooks() {
-  try {
-    const { data, error } = await supabase.from('books').select('*').order('id');
-    if (error) throw error;
-    return data && data.length > 0 ? data : BIBLE_BOOKS_MASTER;
-  } catch (e) {
-    return BIBLE_BOOKS_MASTER;
-  }
-}
-
 export async function testDatabaseConnection(): Promise<{success: boolean, message: string}> {
   try {
     const { error } = await supabase.from('verses').select('id').limit(1);
@@ -83,7 +73,6 @@ export async function saveVerses(verses: { book_name: string, chapter: number, v
   await supabase.from('verses').delete().eq('book_name', book_name).eq('chapter', chapter);
   const { error } = await supabase.from('verses').insert(verses);
   if (error) throw error;
-  await updateReadingProgress(book_name, chapter);
 }
 
 export async function fetchHymns(search?: string) {
@@ -99,11 +88,6 @@ export async function fetchHymns(search?: string) {
   return data || [];
 }
 
-export async function updateReadingProgress(book_name: string, chapter: number) {
-  await supabase.from('reading_progress').upsert({ book_name, chapter }, { onConflict: 'book_name,chapter' });
-}
-
-// Funções para Gerenciamento de Imagens do Mosaico
 export async function getStoredMosaicImage(level: number) {
   const { data, error } = await supabase
     .from('mosaic_images')
@@ -123,20 +107,21 @@ export async function saveMosaicImage(level: number, theme: string, imageData: s
   if (error) console.error("Erro ao salvar imagem no banco:", error);
 }
 
+export async function deleteMosaicImages() {
+  const { error } = await supabase.from('mosaic_images').delete().neq('id', 0);
+  if (error) throw error;
+}
+
 export async function fetchAllMosaicImages() {
   const { data, error } = await supabase
     .from('mosaic_images')
     .select('*')
     .order('level', { ascending: true });
   
-  if (error) {
-    console.error("Erro ao buscar galeria:", error);
-    return [];
-  }
+  if (error) return [];
   return data || [];
 }
 
-// Funções para Gerenciamento de Palavras Cruzadas
 export async function getStoredCrossword(level: number) {
   const { data, error } = await supabase
     .from('crossword_puzzles')
@@ -154,6 +139,11 @@ export async function saveCrossword(level: number, theme: string, puzzleData: an
     .upsert({ level, theme, puzzle_data: puzzleData }, { onConflict: 'level' });
   
   if (error) console.error("Erro ao salvar cruzadinha no banco:", error);
+}
+
+export async function deleteCrosswordPuzzles() {
+  const { error } = await supabase.from('crossword_puzzles').delete().neq('id', 0);
+  if (error) throw error;
 }
 
 export async function fetchAllCrosswords() {
