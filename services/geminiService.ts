@@ -1,94 +1,100 @@
 
-import { GoogleGenAI, Type, Chat } from "@google/genai";
-
-export function createBiblicalChat(): Chat {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  return ai.chats.create({
-    model: 'gemini-3-pro-preview',
-    config: {
-      systemInstruction: `Você é o assistente Ágape, especialista na Harpa Cristã e nas Escrituras Sagradas.`,
-      temperature: 0.7,
-    }
-  });
-}
+import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * Gera uma imagem bíblica majestosa usando gemini-2.5-flash-image.
+ * Gera uma imagem bíblica artística seguindo as Regras Master (Sacerdotais).
  */
-export async function generateBiblicalImage(moment: string): Promise<string | null> {
+export async function generateBiblicalImage(moment: string, reference?: string): Promise<string | null> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   try {
-    // Prompt focado em arte clássica para evitar gatilhos de segurança
-    const prompt = `A majestic, high-quality oil painting of the biblical scene: ${moment}. Renaissance style, dramatic divine lighting, cinematic masterpiece, 4k resolution, no text, no borders.`;
+    const prompt = `Ilustração digital semi-realista de um evento bíblico:
+${moment}.
+
+Regras obrigatórias:
+- Pintura digital respeitosa
+- Atmosfera solene e inspiradora
+- Iluminação suave e equilibrada
+- Trajes bíblicos históricos
+- Sem texto na imagem
+- Sem elementos modernos
+- Composição central equilibrada
+- Proporção 1:1
+- Alta qualidade
+
+Contexto bíblico:
+Evento: ${moment}
+Referência: ${reference || "Escrituras Sagradas"}`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [{ text: prompt }]
-      },
-      config: {
-        // imageConfig é necessário para o modelo flash-image
-        imageConfig: {
+      contents: { parts: [{ text: prompt }] },
+      config: { 
+        imageConfig: { 
           aspectRatio: "1:1"
-        }
+        } 
       }
     });
 
-    if (!response.candidates?.[0]?.content?.parts) {
-      throw new Error("A IA bloqueou a imagem por motivos de segurança ou parâmetros inválidos.");
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
     }
-
-    // Procura pela parte inlineData (imagem base64)
-    for (const part of response.candidates[0].content.parts) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
-    }
-    
-    throw new Error("A resposta da IA não continha dados de imagem.");
-  } catch (e: any) {
-    console.error("Gemini API Error:", e);
-    // Erro amigável para o log do usuário
-    if (e.message?.includes('429')) throw new Error("Limite de velocidade atingido. Aguarde 60 segundos.");
-    if (e.message?.includes('400')) throw new Error("Erro de parâmetro ou Segurança da IA.");
-    throw new Error(e.message || "Erro na conexão com o Google Gemini");
+    return null;
+  } catch (e) {
+    console.error("Erro na geração de imagem Master:", e);
+    return null;
   }
 }
 
-export async function generateCrossword(level: number, theme: string): Promise<any | null> {
+/**
+ * Gera metadados bíblicos para um nível (referência e descrição).
+ */
+export async function generateLevelMetadata(theme: string): Promise<{ reference: string, description: string }> {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Gere uma palavra cruzada bíblica sobre "${theme}". Formato JSON estrito.`,
-      config: { 
+      contents: `Para o evento bíblico "${theme}", forneça a referência bíblica principal (Livro Capítulo:Versículo) e uma descrição educativa curta e didática (máximo 200 caracteres) em Português (Brasil).`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            reference: { type: Type.STRING },
+            description: { type: Type.STRING }
+          },
+          required: ["reference", "description"]
+        }
+      }
+    });
+    return JSON.parse(response.text);
+  } catch {
+    return { reference: "Bíblia Sagrada", description: "Um momento marcante e sagrado da história bíblica para estudo e reflexão." };
+  }
+}
+
+/**
+ * Gera um caça-palavras bíblico temático.
+ */
+export async function generateWordSearch(theme: string): Promise<any> {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Crie um caça-palavras bíblico baseado no tema "${theme}". Retorne uma lista de 8 a 10 palavras bíblicas relacionadas e o tema. Palavras devem ser em Português.`,
+      config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             theme: { type: Type.STRING },
-            words: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  word: { type: Type.STRING },
-                  clue: { type: Type.STRING },
-                  direction: { type: Type.STRING },
-                  row: { type: Type.INTEGER },
-                  col: { type: Type.INTEGER }
-                },
-                required: ["word", "clue", "direction", "row", "col"]
-              }
-            }
+            words: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
           required: ["theme", "words"]
         }
       }
     });
     return JSON.parse(response.text);
-  } catch (e) {
-    return null;
+  } catch {
+    return { theme: "Fé Cristã", words: ["JESUS", "GRACA", "ORACAO", "BIBLIA", "IGREJA", "AMOR", "PAZ"] };
   }
 }

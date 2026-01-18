@@ -7,151 +7,69 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 export const supabase: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export const BIBLE_BOOKS_MASTER = [
-  { name: 'Gênesis', chapters: 50, testament: 'Velho' }, { name: 'Êxodo', chapters: 40, testament: 'Velho' },
-  { name: 'Levítico', chapters: 27, testament: 'Velho' }, { name: 'Números', chapters: 36, testament: 'Velho' },
-  { name: 'Deuteronômio', chapters: 34, testament: 'Velho' }, { name: 'Josué', chapters: 24, testament: 'Velho' },
-  { name: 'Juízes', chapters: 21, testament: 'Velho' }, { name: 'Rute', chapters: 4, testament: 'Velho' },
-  { name: '1 Samuel', chapters: 31, testament: 'Velho' }, { name: '2 Samuel', chapters: 24, testament: 'Velho' },
-  { name: '1 Reis', chapters: 22, testament: 'Velho' }, { name: '2 Reis', chapters: 25, testament: 'Velho' },
-  { name: '1 Crônicas', chapters: 29, testament: 'Velho' }, { name: '2 Crônicas', chapters: 36, testament: 'Velho' },
-  { name: 'Esdras', chapters: 10, testament: 'Velho' }, { name: 'Neemias', chapters: 13, testament: 'Velho' },
-  { name: 'Ester', chapters: 10, testament: 'Velho' }, { name: 'Jó', chapters: 42, testament: 'Velho' },
-  { name: 'Salmos', chapters: 150, testament: 'Velho' }, { name: 'Provérbios', chapters: 31, testament: 'Velho' },
-  { name: 'Eclesiastes', chapters: 12, testament: 'Velho' }, { name: 'Cânticos', chapters: 8, testament: 'Velho' },
-  { name: 'Isaías', chapters: 66, testament: 'Velho' }, { name: 'Jeremias', chapters: 52, testament: 'Velho' },
-  { name: 'Lamentações', chapters: 5, testament: 'Velho' }, { name: 'Ezequiel', chapters: 48, testament: 'Velho' },
-  { name: 'Daniel', chapters: 12, testament: 'Velho' }, { name: 'Oseias', chapters: 14, testament: 'Velho' },
-  { name: 'Joel', chapters: 3, testament: 'Velho' }, { name: 'Amós', chapters: 9, testament: 'Velho' },
-  { name: 'Obadias', chapters: 1, testament: 'Velho' }, { name: 'Jonas', chapters: 4, testament: 'Velho' },
-  { name: 'Miqueias', chapters: 7, testament: 'Velho' }, { name: 'Naum', chapters: 3, testament: 'Velho' },
-  { name: 'Habacuque', chapters: 3, testament: 'Velho' }, { name: 'Sofonias', chapters: 3, testament: 'Velho' },
-  { name: 'Ageu', chapters: 2, testament: 'Velho' }, { name: 'Zacarias', chapters: 14, testament: 'Velho' },
-  { name: 'Malaquias', chapters: 4, testament: 'Velho' },
-  { name: 'Mateus', chapters: 28, testament: 'Novo' }, { name: 'Marcos', chapters: 16, testament: 'Novo' },
-  { name: 'Lucas', chapters: 24, testament: 'Novo' }, { name: 'João', chapters: 21, testament: 'Novo' },
-  { name: 'Atos', chapters: 28, testament: 'Novo' }, { name: 'Romanos', chapters: 16, testament: 'Novo' },
-  { name: '1 Coríntios', chapters: 16, testament: 'Novo' }, { name: '2 Coríntios', chapters: 13, testament: 'Novo' },
-  { name: 'Gálatas', chapters: 6, testament: 'Novo' }, { name: 'Efésios', chapters: 6, testament: 'Novo' },
-  { name: 'Filipenses', chapters: 4, testament: 'Novo' }, { name: 'Colossenses', chapters: 4, testament: 'Novo' },
-  { name: '1 Tessalonicenses', chapters: 5, testament: 'Novo' }, { name: '2 Tessalonicenses', chapters: 3, testament: 'Novo' },
-  { name: '1 Timóteo', chapters: 6, testament: 'Novo' }, { name: '2 Timóteo', chapters: 4, testament: 'Novo' },
-  { name: 'Tito', chapters: 3, testament: 'Novo' }, { name: 'Filemom', chapters: 1, testament: 'Novo' },
-  { name: 'Hebreus', chapters: 13, testament: 'Novo' }, { name: 'Tiago', chapters: 5, testament: 'Novo' },
-  { name: '1 Pedro', chapters: 5, testament: 'Novo' }, { name: '2 Pedro', chapters: 3, testament: 'Novo' },
-  { name: '1 João', chapters: 5, testament: 'Novo' }, { name: '2 João', chapters: 1, testament: 'Novo' },
-  { name: '3 João', chapters: 1, testament: 'Novo' }, { name: 'Judas', chapters: 1, testament: 'Novo' },
-  { name: 'Apocalipse', chapters: 22, testament: 'Novo' }
+  { name: 'Gênesis', chapters: 50 }, { name: 'Êxodo', chapters: 40 }, { name: 'Levítico', chapters: 27 },
+  { name: 'Números', chapters: 36 }, { name: 'Deuteronômio', chapters: 34 }, { name: 'Josué', chapters: 24 },
+  { name: 'Juízes', chapters: 21 }, { name: 'Rute', chapters: 4 }, { name: '1 Samuel', chapters: 31 },
+  { name: '2 Samuel', chapters: 24 }, { name: '1 Reis', chapters: 22 }, { name: '2 Reis', chapters: 25 },
+  { name: '1 Crônicas', chapters: 29 }, { name: '2 Crônicas', chapters: 36 }, { name: 'Esdras', chapters: 10 },
+  { name: 'Neemias', chapters: 13 }, { name: 'Ester', chapters: 10 }, { name: 'Jó', chapters: 42 },
+  { name: 'Salmos', chapters: 150 }, { name: 'Provérbios', chapters: 31 }, { name: 'Eclesiastes', chapters: 12 },
+  { name: 'Cânticos', chapters: 8 }, { name: 'Isaías', chapters: 66 }, { name: 'Jeremias', chapters: 52 },
+  { name: 'Lamentações', chapters: 5 }, { name: 'Ezequiel', chapters: 48 }, { name: 'Daniel', chapters: 12 },
+  { name: 'Oseias', chapters: 14 }, { name: 'Joel', chapters: 3 }, { name: 'Amós', chapters: 9 },
+  { name: 'Obadias', chapters: 1 }, { name: 'Jonas', chapters: 4 }, { name: 'Miqueias', chapters: 7 },
+  { name: 'Naum', chapters: 3 }, { name: 'Habacuque', chapters: 3 }, { name: 'Sofonias', chapters: 3 },
+  { name: 'Ageu', chapters: 2 }, { name: 'Zacarias', chapters: 14 }, { name: 'Malaquias', chapters: 4 },
+  { name: 'Mateus', chapters: 28 }, { name: 'Marcos', chapters: 16 }, { name: 'Lucas', chapters: 24 },
+  { name: 'João', chapters: 21 }, { name: 'Atos', chapters: 28 }, { name: 'Romanos', chapters: 16 },
+  { name: '1 Coríntios', chapters: 16 }, { name: '2 Coríntios', chapters: 13 }, { name: 'Gálatas', chapters: 6 },
+  { name: 'Efésios', chapters: 6 }, { name: 'Filipenses', chapters: 4 }, { name: 'Colossenses', chapters: 4 },
+  { name: '1 Tessalonicenses', chapters: 5 }, { name: '2 Tessalonicenses', chapters: 3 }, { name: '1 Timóteo', chapters: 6 },
+  { name: '2 Timóteo', chapters: 4 }, { name: 'Tito', chapters: 3 }, { name: 'Filemom', chapters: 1 },
+  { name: 'Hebreus', chapters: 13 }, { name: 'Tiago', chapters: 5 }, { name: '1 Pedro', chapters: 5 },
+  { name: '2 Pedro', chapters: 3 }, { name: '1 João', chapters: 5 }, { name: '2 João', chapters: 1 },
+  { name: '3 João', chapters: 1 }, { name: 'Judas', chapters: 1 }, { name: 'Apocalipse', chapters: 22 }
 ];
 
-export async function testDatabaseConnection(): Promise<{success: boolean, message: string}> {
-  try {
-    const { error } = await supabase.from('verses').select('id').limit(1);
-    if (error) return { success: false, message: error.message };
-    return { success: true, message: "Conectado!" };
-  } catch (e: any) {
-    return { success: false, message: e.message };
-  }
-}
-
 export async function fetchVerses(bookName: string, chapter: number) {
-  try {
-    const { data, error } = await supabase
-      .from('verses')
-      .select('*')
-      .eq('book_name', bookName)
-      .eq('chapter', chapter)
-      .order('verse', { ascending: true });
-    return data || [];
-  } catch (e) {
-    return [];
-  }
+  const { data } = await supabase.from('verses').select('*').eq('book_name', bookName).eq('chapter', chapter).order('verse', { ascending: true });
+  return data || [];
 }
 
-export async function saveVerses(verses: { book_name: string, chapter: number, verse: number, text: string }[]) {
-  if (verses.length === 0) return;
-  const { book_name, chapter } = verses[0];
-  await supabase.from('verses').delete().eq('book_name', book_name).eq('chapter', chapter);
-  const { error } = await supabase.from('verses').insert(verses);
-  if (error) throw error;
+export async function saveVerses(verses: any[]) {
+  if (!verses.length) return;
+  await supabase.from('verses').delete().eq('book_name', verses[0].book_name).eq('chapter', verses[0].chapter);
+  await supabase.from('verses').insert(verses);
 }
 
 export async function fetchHymns(search?: string) {
   let query = supabase.from('hymns').select('*').order('number', { ascending: true });
   if (search) {
-    if (!isNaN(Number(search))) {
-      query = query.eq('number', Number(search));
-    } else {
-      query = query.ilike('title', `%${search}%`);
-    }
+    if (!isNaN(Number(search))) query = query.eq('number', Number(search));
+    else query = query.ilike('title', `%${search}%`);
   }
   const { data } = await query;
   return data || [];
 }
 
-export async function getStoredMosaicImage(level: number) {
-  const { data, error } = await supabase
-    .from('mosaic_images')
-    .select('image_data, theme')
-    .eq('level', level)
-    .single();
-  
-  if (error) return null;
-  return data;
+export async function saveHymns(hymns: any[]) {
+  await supabase.from('hymns').upsert(hymns, { onConflict: 'number' });
 }
 
-export async function saveMosaicImage(level: number, theme: string, imageData: string) {
-  const { error } = await supabase
-    .from('mosaic_images')
-    .upsert({ level, theme, image_data: imageData }, { onConflict: 'level' });
-  
-  if (error) console.error("Erro ao salvar imagem no banco:", error);
-}
-
-export async function deleteMosaicImages() {
-  const { error } = await supabase.from('mosaic_images').delete().neq('id', 0);
-  if (error) throw error;
+export async function saveMosaicImage(level: number, theme: string, imageData: string, reference?: string, description?: string) {
+  await supabase.from('mosaic_images').upsert({ level, theme, image_data: imageData, reference, description }, { onConflict: 'level' });
 }
 
 export async function fetchAllMosaicImages() {
-  const { data, error } = await supabase
-    .from('mosaic_images')
-    .select('*')
-    .order('level', { ascending: true });
-  
-  if (error) return [];
+  const { data } = await supabase.from('mosaic_images').select('*').order('level', { ascending: true });
   return data || [];
 }
 
-export async function getStoredCrossword(level: number) {
-  const { data, error } = await supabase
-    .from('crossword_puzzles')
-    .select('puzzle_data, theme')
-    .eq('level', level)
-    .single();
-  
-  if (error) return null;
-  return data;
-}
-
 export async function saveCrossword(level: number, theme: string, puzzleData: any) {
-  const { error } = await supabase
-    .from('crossword_puzzles')
-    .upsert({ level, theme, puzzle_data: puzzleData }, { onConflict: 'level' });
-  
-  if (error) console.error("Erro ao salvar cruzadinha no banco:", error);
-}
-
-export async function deleteCrosswordPuzzles() {
-  const { error } = await supabase.from('crossword_puzzles').delete().neq('id', 0);
-  if (error) throw error;
+  await supabase.from('crossword_puzzles').upsert({ level, theme, puzzle_data: puzzleData }, { onConflict: 'level' });
 }
 
 export async function fetchAllCrosswords() {
-  const { data, error } = await supabase
-    .from('crossword_puzzles')
-    .select('level, theme')
-    .order('level', { ascending: true });
-  
-  if (error) return [];
+  const { data } = await supabase.from('crossword_puzzles').select('*').order('level', { ascending: true });
   return data || [];
 }

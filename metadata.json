@@ -1,8 +1,8 @@
 {
-  "name": "Bíblia de Estudo Ágape",
-  "description": "Uma experiência purista de leitura das Escrituras Sagradas e Harpa Cristã, focada em reverência e clareza.",
+  "name": "Ágape: Jornada Bíblica Gamificada",
+  "description": "Uma plataforma educacional cristã com 100 níveis de quebra-cabeça, caça-palavras bíblico, Bíblia completa e Harpa Cristã.",
   "requestFramePermissions": [
-    "geolocation",
+    "camera",
     "microphone"
   ]
 }
